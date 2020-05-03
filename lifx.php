@@ -16,6 +16,8 @@ $lifx = new Lifx($action, $device);
 
 if (method_exists($lifx, $action)) {
     call_user_func([$lifx, $action]);
+} else {
+    throw new Exception(sprintf("Method %s does not exist or is not yet implemented. If you want, feel free to contribute: https://github.com/Juyn/lifx-jeedom-script"));
 }
 
 class Lifx
@@ -25,7 +27,7 @@ class Lifx
         'getState',
     ];
 
-    const TOKEN = 'YOUR_TOKEN';
+    const TOKEN = '<PERSONNAL_ACCESS_TOKEN>'; // To get an API key, visit https://cloud.lifx.com/settings and generate a new Personal access tokens
     const BASE_PATH = "https://api.lifx.com/v1/lights";
 
     /**
@@ -44,7 +46,8 @@ class Lifx
     private $deviceId;
 
     /**
-     * Lifx constructor.
+     * Lifx constructor
+     *
      * @param string $action
      * @param string $device
      * @throws Exception
@@ -63,6 +66,15 @@ class Lifx
         }
     }
 
+    /**
+     * Fetch the device ID from Lifx
+     *
+     * @param string $label
+     *
+     * @return string
+     *
+     * @throws HttpException
+     */
     public function getDeviceId(string $label): string
     {
         $response = $this->request('all');
@@ -83,23 +95,56 @@ class Lifx
         throw new HttpException('Device not found', 404);
     }
 
-
-    public function toggle()
+    /**
+     * Toggle power on device
+     *
+     * @throws Exception
+     */
+    public function toggle(): void
     {
-        $response = $this->request("toggle", "POST");
+        $response = $this->request($this->getUri("toggle"), "POST");
 
         if (false === in_array($response->getStatusCode(), [207])) {
             throw new \Exception("An error occurred while executing command 'toogle' for device 'device'");
         }
     }
 
-    private function request(string $endpoint, string $method = 'GET', bool $verbose = false): Response
+    /**
+     * Create an URI with the appropriate DeviceId
+     *
+     * @param string $endpoint
+     *
+     * @return string
+     */
+    private function getUri(string $endpoint): string
+    {
+        return sprintf('%s/%s', $this->deviceId ?? 'all', $endpoint);
+    }
+
+
+    /**
+     * Send the Request to Lifx API using a Bearer Auth
+     *
+     * @param string $uri URI to call
+     * @param string $method Default GET
+     * @param bool $verbose
+     *
+     * @return Response
+     */
+    private function request(string $uri, string $method = 'GET', bool $verbose = false): Response
     {
         $curl = curl_init();
 
-        echo sprintf("%s/%s/%s %s", self::BASE_PATH, $this->deviceId ?? "all", $endpoint, PHP_EOL);
+        if (true === empty($uri)) {
+            throw new \http\Exception\InvalidArgumentException('Argument "URI" should not be empty');
+        }
+
+        if ($verbose) {
+            echo sprintf("%s/%s", self::BASE_PATH, $uri);
+        }
+
         curl_setopt_array($curl, array(
-            CURLOPT_URL => sprintf("%s/%s/%s", self::BASE_PATH, $this->deviceId ?? "all", $endpoint),
+            CURLOPT_URL => sprintf("%s/%s", self::BASE_PATH, $uri),
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_ENCODING => "",
             CURLOPT_TIMEOUT => 0,
@@ -119,14 +164,20 @@ class Lifx
 }
 
 class Response {
+    /**
+     * @var int|null
+     */
     private $statusCode;
 
+    /**
+     * @var string|null
+     */
     private $body;
 
     /**
      * Response constructor.
-     * @param $statusCode
-     * @param $body
+     * @param int|null $statusCode
+     * @param string|null $body
      */
     public function __construct($statusCode, $body)
     {
@@ -135,17 +186,17 @@ class Response {
     }
 
     /**
-     * @return mixed
+     * @return int|null
      */
-    public function getStatusCode()
+    public function getStatusCode(): ?int
     {
         return $this->statusCode;
     }
 
     /**
-     * @return mixed
+     * @return string|null
      */
-    public function getBody()
+    public function getBody(): ?string
     {
         return $this->body;
     }
